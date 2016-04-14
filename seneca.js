@@ -447,7 +447,7 @@ function make_seneca (initial_options) {
     argprops: Common.argprops
   }
 
-  //root.store = Store()
+  root.store = Store()
 
   // Used for extending seneca with api_decorate
   root._decorations = {}
