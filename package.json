@@ -1,6 +1,6 @@
 {
   "name": "seneca-browser",
-  "description": "A Microservices Framework for Node.js",
+  "description": "A Microservices Framework for Web Browsers",
   "keywords": [
     "micro",
     "service",
@@ -18,7 +18,7 @@
     "toolkit",
     "startup"
   ],
-  "version": "2.0.0",
+  "version": "1.0.0",
   "license": "MIT",
   "homepage": "http://senecajs.org",
   "author": "Richard Rodger (http://richardrodger.com/)",
