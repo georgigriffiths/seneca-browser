@@ -27,7 +27,7 @@ var Errors = require('./lib/errors')
 var Legacy = require('./lib/legacy')
 var Logging = require('./lib/logging')
 var Optioner = require('./lib/optioner')
-var Package = require('./package.json')
+
 var Plugins = require('./lib/plugins')
 var Print = require('./lib/print')
 var Store = require('./lib/store')
@@ -65,11 +65,11 @@ var internals = {
     // using custom versions.
     default_plugins: {
       basic: true,
-      cluster: true,
+      cluster: false,
       'mem-store': true,
-      repl: true,
-      transport: true,
-      web: true
+      repl: false,
+      transport: false,
+      web: false
     },
 
     // Debug settings.
@@ -83,7 +83,7 @@ var internals = {
       // Print debug info to console
       print: {
         // Print options. Best used via --seneca.print.options.
-        options: false
+        options: true
       },
 
       // Trace action caller and place in args.caller$.
@@ -117,7 +117,7 @@ var internals = {
     // Action cache. Makes inbound messages idempotent.
     actcache: {
       active: true,
-      size: 11111
+      size: 100000000
     },
 
     // Action executor tracing. See gate-executor module.
@@ -158,7 +158,7 @@ var internals = {
       },
 
       // seneca.add uses catchall (pattern='') prior
-      catchall: false
+      catchall: true
     },
 
     // Log status at periodic intervals.
@@ -200,20 +200,20 @@ module.exports = function init (seneca_options, more_options) {
   seneca.decorate('plugins', Plugins.api_decorations.plugins)
 
   // HACK: makes this sync
-  if (options.default_plugins.cluster) {
-    require('seneca-cluster').call(seneca, {})
-  }
+  //if (options.default_plugins.cluster) {
+  //  require('seneca-cluster').call(seneca, {})
+  //}
 
   // HACK: makes this sync
-  if (options.default_plugins.repl) {
-    require('seneca-repl').call(seneca, options.repl)
-  }
+  //if (options.default_plugins.repl) {
+  //  require('seneca-repl').call(seneca, options.repl)
+  //}
 
   // Register default plugins, unless turned off by options.
   if (options.default_plugins.basic) { seneca.use(require('seneca-basic')) }
-  if (options.default_plugins['mem-store']) { seneca.use(require('seneca-mem-store')) }
-  if (options.default_plugins.transport) { seneca.use(require('seneca-transport')) }
-  if (options.default_plugins.web) { seneca.use(require('seneca-web')) }
+  //if (options.default_plugins['mem-store']) { seneca.use(require('seneca-mem-store')) }
+  /*if (options.default_plugins.transport) { seneca.use(require('seneca-transport')) }
+  if (options.default_plugins.web) { seneca.use(require('seneca-web')) }*/
 
   // Register plugins specified in options.
   _.each(options.plugins, function (plugindesc) {
@@ -285,7 +285,7 @@ function make_seneca (initial_options) {
   root.start_time = Date.now()
   root.fixedargs = {}
   root.context = {}
-  root.version = Package.version
+  root.version = 1
 
   // Seneca methods. Official API.
   root.add = api_add // Add a message pattern and action.
@@ -447,7 +447,7 @@ function make_seneca (initial_options) {
     argprops: Common.argprops
   }
 
-  root.store = Store()
+  //root.store = Store()
 
   // Used for extending seneca with api_decorate
   root._decorations = {}
@@ -1033,21 +1033,22 @@ function make_seneca (initial_options) {
           instance.fixedargs.tx$ ||
           instance.idgen()
     var actid = (id_tx[0] || instance.idgen()) + '/' + tx
-
-    try {
-      actid = JSON.stringify(Common.clean(args))
-    } catch(e) {
-      console.log('error circular',args.role, args.cmd)
-    }
     var actstart = Date.now()
 
     args.default$ = args.default$ || (!so.strict.find ? {} : args.default$)
     prior_ctxt = prior_ctxt || { chain: [], entry: true, depth: 1 }
     actdone = actdone || _.noop
 
+    if (args.cache$) {
+      try {
+          actid = args.cache$ + "/" + JSON.stringify(Common.clean(args)).replace(/\//g, '\\');
+      } catch (e) {
+          seneca.print('NO CACHE AS ARGS HAVE CIRCULAR REFERENCES' + args.toString())
+      }
+    }
 
     // if previously seen message, provide previous result, and don't process again
-    if (apply_actcache(instance, args, prior_ctxt, actdone, act_callpoint, actid)) {
+    if (apply_actcache(instance, args, prior_ctxt, actdone, act_callpoint)) {
       return
     }
 
@@ -1204,6 +1205,8 @@ function make_seneca (initial_options) {
               })
           }
         }
+
+
 
         private$.actcache.set(actid, {
           result: result,
@@ -1383,9 +1386,10 @@ function make_seneca (initial_options) {
 
   // Check if actid has already been seen, and if action cache is active,
   // then provide cached result, if any. Return true in this case.
-  function apply_actcache (instance, args, prior_ctxt, actcb, act_callpoint, actid) {
+  function apply_actcache (instance, args, prior_ctxt, actcb, act_callpoint) {
+      var actid = args.id$ || args.actid$
 
-    if (actid != null && so.actcache.active) {
+      if (actid != null && so.actcache.active) {
       var actdetails = private$.actcache.get(actid)
 
       if (actdetails) {
@@ -1394,7 +1398,7 @@ function make_seneca (initial_options) {
 
         Logging.log_act_cache(root, {actid: actid}, actmeta,
           args, prior_ctxt, act_callpoint)
-
+        console.log('cache', actid)
         if (actcb) {
           setImmediate(function () {
             actcb.apply(instance, actdetails.result)
